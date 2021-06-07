@@ -1,6 +1,6 @@
 {
 	"name": "node-red-node-alexa",
-	"version": "1.0.13",
+	"version": "1.0.20",
 	"description": "A simple Node-Red integration for Alexa!",
 	"node-red": {
 		"nodes": {

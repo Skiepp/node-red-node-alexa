@@ -16,9 +16,11 @@ ex: /alexa
 3) Create the model of your interest.
 4) In the endpoint section, just insert:
 ###### \<Node-RED endpoit\>/\<url-configured in configuration node\>
-ex: https://myNodeRed:1880/alexa
+ex: https://myNodeRed/alexa
 
-Note: SSL required.
+Note:
+* SSL is required and the node-red server must accept requests on port 443.
+* TLS 1.3 is currently required by Amazon for HTTPS
 
 
 ## (III) Nodes:

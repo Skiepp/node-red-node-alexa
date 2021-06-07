@@ -7,7 +7,7 @@ module.exports = function(RED) {
     var urlencParser = bodyParser.urlencoded({extended:true});
     var typer = require('media-typer');
     var isUtf8 = require('is-utf8');
-    var verifier = require('alexa-verifier');
+//    var verifier = require('alexa-verifier');
 
     
     var handleList = [];
@@ -137,6 +137,46 @@ module.exports = function(RED) {
 // =============================================================
 // =============================================================
 
+    function AlexaCanFulfillIntentReq(config) {
+        RED.nodes.createNode(this, config);
+        this.confSkill = RED.nodes.getNode(config.skill);
+        if (RED.settings.httpNodeRoot !== false && this.confSkill) {
+            
+            if (this.confSkill.url[0] !== '/') {
+                this.confSkill.url = '/' + this.confSkill.url;
+            }
+
+        // ----------------------------------------------------
+
+            var node    = this;
+            setAlexaHandler(this.confSkill.url);
+
+            handleList.push({
+                "url":  this.confSkill.url,
+                "type": "CanFulfillIntentRequest",
+                "node": node
+            });
+
+        // ----------------------------------------------------
+
+            this.on("close",function() {
+                var node = this;
+                RED.httpNode._router.stack.forEach(function(route,i,routes) {
+                    if (route.route && route.route.path === node.url && route.route.methods[node.method]) {
+                        routes.splice(i,1);
+                    }
+                });
+            });
+
+        } else {
+            this.warn(RED._("node-alexa.errors.not-created"));
+        }
+    }
+    RED.nodes.registerType("Alexa CanFulfillIntentRequest", AlexaCanFulfillIntentReq);
+
+// =============================================================
+// =============================================================
+
     function SessionEndReq(config) {
         RED.nodes.createNode(this, config);
         this.confSkill = RED.nodes.getNode(config.skill);
@@ -192,6 +232,7 @@ module.exports = function(RED) {
 
             switch(type) {
                 case "IntentRequest":
+                case "CanFulfillIntentRequest":
                     if(req.body.request.intent.name == "AMAZON.StopIntent") {
                         type = "SessionEndedRequest";
                         user = req.body.session.sessionId;
@@ -206,11 +247,30 @@ module.exports = function(RED) {
                     user      = req.body.session.sessionId;
             }
 
+            //console.log("req.url="+req.url+"\n");
+            var req_url=req.url;
+
+            var idx = req_url.indexOf("/?");
+            if (idx == -1)
+            {   idx = req_url.indexOf("?");
+	        }
+            if (idx != -1)
+            {   req_url = req_url.substring(0, idx);
+            }
+//console.log("req.url="+req_url+"\n");
+
             for (var i = 0, len = handleList.length; i < len; i++) {
 
-                if(handleList[i].url == req.url && handleList[i].type == type) {
+
+//console.log("checking #"+i+"\n");
+//console.log("    expected url="+handleList[i].url+"\n");
+//                if(handleList[i].url == req.url && handleList[i].type == type) {
+                if(handleList[i].url == req_url && handleList[i].type == type) {
+//console.log("code was triggered\n");
                     var msg = { payload:resp, user:user, res:createResponseWrapper(handleList[i].node, res)}
+//console.log("msg="+msg+"\n");
                     handleList[i].node.send(msg);
+//console.log("message sent to node\n");
                 }
             }
         };
@@ -234,7 +294,7 @@ module.exports = function(RED) {
                 httpMiddleware = RED.settings.httpNodeMiddleware;
             }
         }
-
+/*
         var alexaVerifier = function(req, res, next) {
             if(!req.headers.signaturecertchainurl){
                     res.status(403).json({ status: 'failure', reason: er });
@@ -268,8 +328,9 @@ module.exports = function(RED) {
                     });
             });
         }
-        
-        RED.httpNode.post(url, cookieParser(), alexaVerifier, httpMiddleware, corsHandler, urlencParser, multipartParser, this.callback, this.errorHandler);
+*/        
+	// verifier not working -- disabled
+        RED.httpNode.post(url, cookieParser(), /*alexaVerifier,*/ httpMiddleware, corsHandler, urlencParser, multipartParser, this.callback, this.errorHandler);
     }
 
 // =============================================================
@@ -305,6 +366,38 @@ module.exports = function(RED) {
         });
     }
     RED.nodes.registerType("Alexa Response", AlexaResponse);
+
+// =============================================================
+// =============================================================
+
+    function AlexaCanFulfillIntentResponse(config) {
+        RED.nodes.createNode(this, config);
+        this.confSkill = RED.nodes.getNode(config.skill);
+
+        this.on("input",function(msg) {
+            if (msg.res) {
+                var statusCode = 200;
+                var closing = true;
+
+                if(typeof msg.closing !== 'undefined' && msg.closing !== null) 
+                    closing = msg.closing;
+    
+                var json = {
+                    "response": {
+                        "canFulfillIntent": {
+                            "canFulfill": ""+msg.payload
+                        }
+                    },
+                    "version": "1.0"
+                };
+                msg.res._res.status(statusCode).send(json);
+
+            } else {
+                RED.log.warn(RED._("node-alexa.errors.no-response"));
+            }
+        });
+    }
+    RED.nodes.registerType("Alexa CanFulfillIntentResponse", AlexaCanFulfillIntentResponse);
 
 // =============================================================
 // =============================================================
